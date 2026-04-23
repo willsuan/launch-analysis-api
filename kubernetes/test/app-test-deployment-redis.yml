@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artemis-test-redis-deployment
+  labels:
+    app: artemis-test-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: artemis-test-redis
+  template:
+    metadata:
+      labels:
+        app: artemis-test-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          # Save RDB snapshot every 60s if >=1 key changed, plus AOF for extra durability.
+          args: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - mountPath: /data
+              name: redis-data
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: artemis-test-redis-pvc

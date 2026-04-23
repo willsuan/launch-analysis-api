@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artemis-prod-api-deployment
+  labels:
+    app: artemis-prod-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: artemis-prod-api
+  template:
+    metadata:
+      labels:
+        app: artemis-prod-api
+    spec:
+      containers:
+        - name: api
+          image: REPLACE_ME/artemis-launch-api:prod
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REDIS_HOST
+              value: artemis-prod-redis-service
+            - name: REDIS_PORT
+              value: "6379"
+            - name: DATA_FILE
+              value: /data/launches.json
+          volumeMounts:
+            - mountPath: /data
+              name: data-volume
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: artemis-prod-redis-pvc

@@ -1,0 +1,32 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+
+  api:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DATA_FILE: /data/launches.json
+    volumes:
+      - ./data:/data
+    depends_on:
+      - redis
+
+  worker:
+    build: .
+    command: ["python", "-m", "src.worker"]
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    volumes:
+      - ./data:/data
+    depends_on:
+      - redis

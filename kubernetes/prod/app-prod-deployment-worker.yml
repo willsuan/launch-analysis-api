@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artemis-prod-worker-deployment
+  labels:
+    app: artemis-prod-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: artemis-prod-worker
+  template:
+    metadata:
+      labels:
+        app: artemis-prod-worker
+    spec:
+      containers:
+        - name: worker
+          image: REPLACE_ME/artemis-launch-api:prod
+          imagePullPolicy: Always
+          command: ["python", "-m", "src.worker"]
+          env:
+            - name: REDIS_HOST
+              value: artemis-prod-redis-service
+            - name: REDIS_PORT
+              value: "6379"
