@@ -3,6 +3,7 @@
 A REST API for exploring and analyzing space launch data, with a focus on the Artemis program. Built with FastAPI, Redis, and a worker-based architecture for asynchronous plot generation. Deployable locally with Docker Compose and to Kubernetes.
 
 **Authors:** Will Suan and Dilynn Derden
+
 **Course:** COE 332 — Software Engineering and Design
 
 ---
