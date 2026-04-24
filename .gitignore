@@ -4,5 +4,7 @@ __pycache__/
 .pytest_cache/
 data/launches.json
 data/redis/
-*.png
+# Ignore generated result PNGs but keep the architecture diagram
+/tmp/*.png
+result_*.png
 .DS_Store
