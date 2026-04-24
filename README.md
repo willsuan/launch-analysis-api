@@ -84,7 +84,24 @@ artemis-launch-api/
 
 ## Setup & Testing on a Local Linux VM
 
-### 1. Clone and install
+### Quick start (class VM)
+
+Everything is automated. From your laptop:
+
+```bash
+./scripts/deploy_to_vm.sh --tacc-user YOUR_TACC_USERNAME
+```
+
+…prints the SSH chain you need to run. Once you're on the VM, a single command
+sets up Docker, kubectl, the repo, Python deps, and runs the test suite:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/willsuan/launch-analysis-api/main/scripts/vm_bootstrap.sh | bash
+```
+
+### Manual (or on any Linux box)
+
+#### 1. Clone and install
 
 ```bash
 git clone <your-repo-url>
