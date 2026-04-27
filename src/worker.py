@@ -119,17 +119,46 @@ def plot_outcomes_pie(provider: str | None, rocket_family: str | None) -> bytes:
         counts[status] += 1
     if not counts:
         raise ValueError("No launches matched the provider/rocket_family filter")
-    labels = list(counts.keys())
-    values = list(counts.values())
 
-    fig, ax = plt.subplots(figsize=(7, 7))
-    ax.pie(values, labels=labels, autopct="%1.1f%%", startangle=90)
+    # Sort by count descending so legend ordering matches slice size.
+    items = counts.most_common()
+    labels = [s for s, _ in items]
+    values = [c for _, c in items]
+    total = sum(values)
+
+    # Only show the percent inside the slice if it's big enough to read.
+    def autopct_only_large(pct: float) -> str:
+        return f"{pct:.1f}%" if pct >= 4.0 else ""
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+    wedges, _, _ = ax.pie(
+        values,
+        autopct=autopct_only_large,
+        startangle=90,
+        pctdistance=0.7,
+        textprops={"fontsize": 10, "color": "white", "fontweight": "bold"},
+    )
+
+    # Build legend text "Status (count, pct%)"
+    legend_labels = [
+        f"{label} ({count:,}, {100 * count / total:.1f}%)"
+        for label, count in items
+    ]
+    ax.legend(
+        wedges,
+        legend_labels,
+        title="Outcome",
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+        frameon=False,
+    )
+
     filter_desc = provider or rocket_family or "All launches"
-    ax.set_title(f"Launch Outcomes: {filter_desc}")
+    ax.set_title(f"Launch Outcomes: {filter_desc}  (n={total:,})")
     fig.tight_layout()
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=120)
+    fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
