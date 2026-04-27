@@ -1,4 +1,5 @@
-"""Job helpers. Thin wrappers around Redis to keep api.py and worker.py clean."""
+"""Job lifecycle helpers. Both api.py and worker.py go through these so neither
+has to know which Redis db is which."""
 import json
 import uuid
 from datetime import datetime, timezone
@@ -12,7 +13,7 @@ def _now_iso() -> str:
 
 
 def submit_job(req: JobRequest) -> Job:
-    """Create a new job, store it, and push its ID onto the queue."""
+    """Persist a queued Job and push its id onto the worker queue."""
     job_id = str(uuid.uuid4())
     job = Job(
         id=job_id,
@@ -67,7 +68,7 @@ def update_job_status(
 
 
 def pop_next_job(timeout: int = 0) -> str | None:
-    """Blocking pop. Returns a job ID or None on timeout."""
+    """BLPOP off the queue. Returns the job id, or None if timeout elapsed."""
     client = get_queue_client()
     result = client.blpop(QUEUE_KEY, timeout=timeout)
     if result is None:

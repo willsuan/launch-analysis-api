@@ -1,11 +1,12 @@
-"""Worker loop: pulls jobs off the queue, generates plots, stores images in Redis."""
+"""Worker loop. BLPOP a job, render a matplotlib chart, write the PNG back into Redis."""
 import io
 import json
 import os
 import sys
 from collections import Counter, defaultdict
 
-# Headless matplotlib backend. Must be set before pyplot import.
+# Force the non-interactive backend before pyplot is imported. Without this
+# matplotlib will try to open a Tk window inside the container and crash.
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -18,8 +19,6 @@ from src.jobs import (
 )
 from src.redis_client import get_raw_client
 
-
-# --------- Data helpers ---------
 
 def _iter_launches():
     client = get_raw_client()
@@ -37,10 +36,8 @@ def _year(launch: dict) -> int | None:
         return None
 
 
-# --------- Plot generators ---------
-
 def plot_success_rate_over_time(start_year: int | None, end_year: int | None) -> bytes:
-    """Bar chart of success vs failure counts per year."""
+    """Stacked bar of successes vs. failures by year."""
     per_year_success = Counter()
     per_year_failure = Counter()
     for launch in _iter_launches():
@@ -120,13 +117,13 @@ def plot_outcomes_pie(provider: str | None, rocket_family: str | None) -> bytes:
     if not counts:
         raise ValueError("No launches matched the provider/rocket_family filter")
 
-    # Sort by count descending so legend ordering matches slice size.
+    # most_common ordering keeps legend entries in the same order as slices.
     items = counts.most_common()
     labels = [s for s, _ in items]
     values = [c for _, c in items]
     total = sum(values)
 
-    # Only show the percent inside the slice if it's big enough to read.
+    # Inline percent on small slices stacks unreadably, so suppress below 4%.
     def autopct_only_large(pct: float) -> str:
         return f"{pct:.1f}%" if pct >= 4.0 else ""
 
@@ -139,7 +136,6 @@ def plot_outcomes_pie(provider: str | None, rocket_family: str | None) -> bytes:
         textprops={"fontsize": 10, "color": "white", "fontweight": "bold"},
     )
 
-    # Build legend text "Status (count, pct%)"
     legend_labels = [
         f"{label} ({count:,}, {100 * count / total:.1f}%)"
         for label, count in items
@@ -163,8 +159,6 @@ def plot_outcomes_pie(provider: str | None, rocket_family: str | None) -> bytes:
     buf.seek(0)
     return buf.read()
 
-
-# --------- Main loop ---------
 
 PLOT_DISPATCH = {
     "success_rate_over_time": lambda job: plot_success_rate_over_time(job.start_year, job.end_year),

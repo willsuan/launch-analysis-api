@@ -1,4 +1,4 @@
-"""FastAPI application exposing CRUD + job submission endpoints."""
+"""HTTP layer. CRUD on launch data, plus job submission and result retrieval."""
 import json
 from typing import Optional
 
@@ -20,8 +20,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-
-# --------- Help endpoint ---------
 
 @app.get("/help")
 def help_routes() -> dict:
@@ -45,11 +43,9 @@ def help_routes() -> dict:
     }
 
 
-# --------- Raw data CRUD ---------
-
 @app.post("/data")
 def load_data() -> dict:
-    """Load the launch dataset from disk into Redis."""
+    """Bulk-load data/launches.json into the raw-data Redis db."""
     try:
         launches = ingest.load_from_disk()
     except FileNotFoundError as e:
@@ -65,7 +61,7 @@ def load_data() -> dict:
 
 @app.get("/data")
 def get_all_data() -> list[dict]:
-    """Return every raw launch record."""
+    """Dump every record. Big response (~30MB) for the full dataset."""
     client = get_raw_client()
     out = []
     for key in client.scan_iter("*"):
@@ -81,8 +77,6 @@ def delete_data() -> dict:
     client.flushdb()
     return {"deleted": True}
 
-
-# --------- Launches (REST collection) ---------
 
 def _iter_launches():
     client = get_raw_client()
@@ -130,8 +124,6 @@ def get_launch(launch_id: str) -> dict:
     return json.loads(raw)
 
 
-# --------- Missions ---------
-
 @app.get("/missions")
 def get_missions() -> list[dict]:
     seen = {}
@@ -141,8 +133,6 @@ def get_missions() -> list[dict]:
             seen[m["id"]] = m
     return list(seen.values())
 
-
-# --------- Agencies ---------
 
 @app.get("/agencies")
 def get_agencies() -> list[dict]:
@@ -164,8 +154,6 @@ def get_agency_launches(agency_id: int) -> list[dict]:
     return out
 
 
-# --------- Jobs ---------
-
 @app.post("/jobs")
 def create_job(req: JobRequest) -> Job:
     return submit_job(req)
@@ -183,8 +171,6 @@ def get_single_job(job_id: str) -> Job:
         raise HTTPException(status_code=404, detail=f"No job with id {job_id}")
     return job
 
-
-# --------- Results ---------
 
 @app.get("/results/{job_id}")
 def get_job_result(job_id: str):

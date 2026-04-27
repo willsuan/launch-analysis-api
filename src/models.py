@@ -1,4 +1,5 @@
-"""Pydantic models for the Artemis Launch API dataset."""
+"""Pydantic models. Most fields are Optional because the upstream LL2 API
+omits values for older or in-progress missions."""
 from typing import Optional, List, Any
 from pydantic import BaseModel, Field
 
@@ -59,11 +60,11 @@ class Pad(BaseModel):
 
 
 class Launch(BaseModel):
-    """A single launch record from the Launch Library 2 API."""
+    """One launch record from LL2."""
     id: str
     name: Optional[str] = None
     status: Optional[LaunchStatus] = None
-    net: Optional[str] = None  # ISO 8601 timestamp
+    net: Optional[str] = None  # "no earlier than" - ISO 8601
     window_start: Optional[str] = None
     window_end: Optional[str] = None
     launch_service_provider: Optional[Agency] = None
@@ -73,7 +74,7 @@ class Launch(BaseModel):
 
 
 class JobRequest(BaseModel):
-    """Incoming job submission payload."""
+    """What POST /jobs accepts."""
     plot_type: str = Field(..., description="One of: success_rate_over_time, frequency_by_provider, outcomes_pie")
     provider: Optional[str] = Field(None, description="Filter by launch provider name (for outcomes_pie)")
     rocket_family: Optional[str] = Field(None, description="Filter by rocket family (for outcomes_pie)")
@@ -82,7 +83,7 @@ class JobRequest(BaseModel):
 
 
 class Job(BaseModel):
-    """Job metadata stored in Redis."""
+    """What lives in the jobs db."""
     id: str
     status: str  # queued, in_progress, complete, failed
     plot_type: str

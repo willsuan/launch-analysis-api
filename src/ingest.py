@@ -1,13 +1,15 @@
-"""Fetches the full launch dataset from the Launch Library 2 API and caches it to disk.
+"""Pulls the LL2 launch dataset down to disk.
 
-The LL2 public API is rate-limited (~15 req/hour unauthenticated). This module:
+LL2's anonymous limit is around 15 requests per hour and the full crawl is
+~78 pages, so a naive run will burn all night repeating the same retry. The
+fix is three things:
 
-1. Saves progress incrementally to data/launches.json after every page so the
-   work isn't lost when the network or the SSH session drops.
-2. Persists the next URL in a tiny progress file (data/.ingest_progress) so
-   subsequent runs resume where the last one left off.
-3. Backs off exponentially on rate-limit responses (60s -> 5min -> 20min)
-   instead of hammering the API every minute.
+  1. After every page that succeeds, write the cumulative result to
+     data/launches.json. If anything kills the process, no work is lost.
+  2. Persist the URL of the next page in data/.ingest_progress. A subsequent
+     run reads it and picks up from there.
+  3. On 429, back off 60s, then 5m, then 20m. Polling every minute just
+     sits in the rate window forever.
 """
 import json
 import os
@@ -23,7 +25,7 @@ PAGE_LIMIT = 100
 
 
 def _load_state() -> tuple[list[dict], str | None]:
-    """Return (existing_launches, next_url). If neither file exists, return ([], starting_url)."""
+    """Read what we have on disk. Returns (existing launches, next URL to fetch)."""
     launches: list[dict] = []
     next_url: str | None = None
 
@@ -40,7 +42,7 @@ def _load_state() -> tuple[list[dict], str | None]:
         except OSError:
             next_url = None
     else:
-        # Fresh run
+        # No progress file means a fresh run; start from page 1.
         next_url = f"{LL2_BASE}?mode=normal&limit={PAGE_LIMIT}"
 
     if next_url == "DONE":
@@ -51,7 +53,8 @@ def _load_state() -> tuple[list[dict], str | None]:
 
 def _save_state(launches: list[dict], next_url: str | None) -> None:
     DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    # Atomic-ish: write to .tmp then rename
+    # Write to a sibling tmp file and rename so a crash mid-write can't leave
+    # us with a half-written launches.json.
     tmp = DATA_FILE.with_suffix(DATA_FILE.suffix + ".tmp")
     with open(tmp, "w") as f:
         json.dump(launches, f)
@@ -60,10 +63,7 @@ def _save_state(launches: list[dict], next_url: str | None) -> None:
 
 
 def fetch_all_launches(sleep_between: float = 5.0) -> list[dict]:
-    """Walk the paginated API. Resumes from disk if a prior run was interrupted.
-
-    Saves after every successful page so SSH disconnects don't kill progress.
-    """
+    """Walk LL2's paginated launch endpoint until exhausted, resuming if needed."""
     launches, url = _load_state()
     seen_ids = {l.get("id") for l in launches if l.get("id")}
 
@@ -74,7 +74,8 @@ def fetch_all_launches(sleep_between: float = 5.0) -> list[dict]:
     if launches:
         print(f"Resuming with {len(launches)} launches already on disk.", flush=True)
 
-    backoff_steps = [60, 300, 1200]  # 1m, 5m, 20m
+    # Step ladder: first 429 sleeps a minute, then 5, then 20.
+    backoff_steps = [60, 300, 1200]
     backoff_idx = 0
     page = 1
     while url:
@@ -99,7 +100,7 @@ def fetch_all_launches(sleep_between: float = 5.0) -> list[dict]:
             continue
 
         resp.raise_for_status()
-        backoff_idx = 0  # reset after a success
+        backoff_idx = 0  # any successful fetch resets the ladder
 
         payload = resp.json()
         new_count = 0
@@ -113,15 +114,13 @@ def fetch_all_launches(sleep_between: float = 5.0) -> list[dict]:
         url = payload.get("next")
         page += 1
 
-        # Persist after every successful page
         _save_state(launches, url)
         print(f"  +{new_count} launches (total: {len(launches)})", flush=True)
 
         if url:
             time.sleep(sleep_between)
 
-    # Mark complete
-    _save_state(launches, None)
+    _save_state(launches, None)  # writes "DONE" so next run is a no-op
     return launches
 
 

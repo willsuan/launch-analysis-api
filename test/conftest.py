@@ -1,4 +1,5 @@
-"""Shared fixtures. Uses fakeredis to avoid needing a real Redis during unit tests."""
+"""Shared pytest fixtures. We swap in fakeredis so the test suite has no
+external dependencies and runs in under a second."""
 import json
 import sys
 import types
@@ -6,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-# Ensure the repo root is on sys.path so `import src.*` works
+# Make `import src.*` work when running pytest from the repo root.
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -45,12 +46,7 @@ SAMPLE_LAUNCHES = [
 
 @pytest.fixture
 def fake_redis(monkeypatch):
-    """Replace all Redis clients with fakeredis-backed instances.
-
-    Falls back to a simple in-memory dict if fakeredis isn't installed —
-    enough coverage for the model/plot logic. For deeper integration tests
-    install fakeredis: `pip install fakeredis`.
-    """
+    """Patch the four Redis client factories to return fakeredis instances."""
     try:
         import fakeredis
     except ImportError:
@@ -67,7 +63,8 @@ def fake_redis(monkeypatch):
     monkeypatch.setattr(redis_client, "get_jobs_client", lambda: jobs)
     monkeypatch.setattr(redis_client, "get_results_client", lambda: results)
 
-    # jobs.py, api.py, and worker.py import these at module-scope, so patch there too
+    # jobs / api / worker each import the factory by name at module load time,
+    # so monkeypatching redis_client alone misses those bindings.
     from src import jobs as jobs_module, api as api_module, worker as worker_module
     monkeypatch.setattr(jobs_module, "get_jobs_client", lambda: jobs)
     monkeypatch.setattr(jobs_module, "get_queue_client", lambda: queue)
@@ -80,7 +77,7 @@ def fake_redis(monkeypatch):
 
 @pytest.fixture
 def loaded_redis(fake_redis):
-    """Pre-populate the raw DB with sample launches."""
+    """fake_redis with the sample launches already inserted into the raw db."""
     for launch in SAMPLE_LAUNCHES:
         fake_redis["raw"].set(launch["id"], json.dumps(launch))
     return fake_redis
