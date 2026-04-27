@@ -3,14 +3,15 @@ kind: Ingress
 metadata:
   name: artemis-prod-api-ingress
   annotations:
-    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
+  ingressClassName: nginx
   rules:
-    - host: artemis.coe332.tacc.cloud  # replace with your class cluster host
+    - host: "wsuan-artemis.coe332.tacc.cloud"
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - pathType: Prefix
+            path: "/"
             backend:
               service:
                 name: artemis-prod-api-service

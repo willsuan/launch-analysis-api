@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: REPLACE_ME/artemis-launch-api:prod
+          image: willsuan/artemis-launch-api:prod
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
@@ -27,10 +27,13 @@ spec:
               value: "6379"
             - name: DATA_FILE
               value: /data/launches.json
+          # An emptyDir gives the API its own /data scratch space for the
+          # one-shot launches.json bootstrap file. We copy data in via
+          # `kubectl cp`, then POST /data loads it into Redis (which IS
+          # persisted via its own PVC).
           volumeMounts:
             - mountPath: /data
-              name: data-volume
+              name: bootstrap-data
       volumes:
-        - name: data-volume
-          persistentVolumeClaim:
-            claimName: artemis-prod-redis-pvc
+        - name: bootstrap-data
+          emptyDir: {}
