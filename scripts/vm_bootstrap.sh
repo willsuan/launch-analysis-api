@@ -92,8 +92,13 @@ Next steps on this VM:
 
   cd $REPO_DIR
 
-  # One-time: fetch the full ~7,800 launches from the LL2 API into data/launches.json
-  make ingest     # (~several minutes; rate-limited)
+  # One-time: fetch the full ~7,800 launches into data/launches.json.
+  # The LL2 anonymous limit is 15 req/hour, so this takes ~5h wall-clock.
+  # The auto-ingest wrapper runs it unattended in tmux with auto-restart:
+  bash scripts/auto_ingest.sh           # start (idempotent)
+  bash scripts/auto_ingest.sh status    # check progress
+  bash scripts/auto_ingest.sh logs      # tail -f the log
+  # ...then walk away. Come back tomorrow, status will say "complete".
 
   # Bring up the full stack (Redis + API + Worker) locally on the VM
   sudo docker compose up -d --build     # or just 'docker compose' if you've re-logged in

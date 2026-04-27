@@ -3,7 +3,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/launches.json
+data/.ingest_progress
+data/launches.json.tmp
 data/redis/
+ingest.log
 # Ignore generated result PNGs but keep the architecture diagram
 /tmp/*.png
 result_*.png
