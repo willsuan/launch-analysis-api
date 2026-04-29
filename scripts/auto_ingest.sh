@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
-# auto_ingest.sh — fully unattended ingest runner.
+# Run the LL2 ingest unattended in a tmux session, with auto-restart.
+# No-op if already complete or already running. Idempotent on re-run.
 #
-# What it does:
-#   - If the dataset is already complete, exits immediately.
-#   - Otherwise launches the ingest inside a tmux session named "ingest".
-#   - Inside tmux, runs the ingest in a restart loop so a transient crash
-#     (network blip, OOM, anything other than DONE) automatically respawns it.
-#   - Mirrors all output to ingest.log for easy `tail -f` from outside tmux.
-#   - Idempotent: re-running while it's already going just prints status.
-#
-# Usage:
-#   bash scripts/auto_ingest.sh         # start (or report status if already running)
-#   bash scripts/auto_ingest.sh status  # just print status
-#   bash scripts/auto_ingest.sh stop    # kill the running ingest
-#   bash scripts/auto_ingest.sh attach  # attach to the live tmux session
-#   bash scripts/auto_ingest.sh logs    # tail -f ingest.log
+#   bash scripts/auto_ingest.sh           # start or report status
+#   bash scripts/auto_ingest.sh status
+#   bash scripts/auto_ingest.sh stop
+#   bash scripts/auto_ingest.sh attach    # ctrl-b d to detach
+#   bash scripts/auto_ingest.sh logs      # tail -f ingest.log
 
 set -euo pipefail
 
@@ -46,93 +38,89 @@ is_running() {
 }
 
 print_status() {
-    bold "=== Artemis ingest status ==="
+    bold "ingest status"
     if is_done; then
-        green "✔ Ingest complete."
+        green "complete"
     elif is_running; then
-        blue "⟳ Ingest is RUNNING in tmux session '$SESSION'."
+        blue "running in tmux session '$SESSION'"
     else
-        warn "✗ Ingest is NOT running."
+        warn "not running"
     fi
-    echo "  Records on disk: $(count_records)"
-    echo "  Data file:       $DATA_FILE"
-    echo "  Log file:        $LOG_FILE"
+    echo "  records on disk: $(count_records)"
+    echo "  data file:       $DATA_FILE"
+    echo "  log file:        $LOG_FILE"
     if [[ -f "$LOG_FILE" ]]; then
         echo
-        bold "Last 5 log lines:"
+        echo "last 5 log lines:"
         tail -n 5 "$LOG_FILE" | sed 's/^/  /'
     fi
 }
 
 cmd_start() {
     if is_done; then
-        green "✔ Already complete. $(count_records) records in $DATA_FILE."
+        green "already complete, $(count_records) records in $DATA_FILE"
         exit 0
     fi
     if is_running; then
-        blue "⟳ Ingest already running in tmux session '$SESSION'."
+        blue "ingest already running in tmux session '$SESSION'"
         print_status
         echo
-        echo "Re-attach: bash scripts/auto_ingest.sh attach"
-        echo "Tail logs: bash scripts/auto_ingest.sh logs"
+        echo "re-attach: bash scripts/auto_ingest.sh attach"
+        echo "tail logs: bash scripts/auto_ingest.sh logs"
         exit 0
     fi
 
-    bold "Starting ingest in tmux session '$SESSION'..."
+    bold "starting ingest in tmux session '$SESSION'"
     cd "$REPO_DIR"
 
-    # The inner command:
-    #   - cd into repo
-    #   - activate venv
-    #   - run ingest in a restart loop until DONE
-    #   - tee output into ingest.log so we can tail it from outside tmux
-    #   - on completion, print a banner and keep the pane open briefly
+    # Inner shell does: cd, activate venv, loop the ingest until DONE,
+    # tee to ingest.log so the log is readable from outside tmux.
     local inner
     inner=$(cat <<'INNER'
 cd "$HOME/launch-analysis-api"
 source .venv/bin/activate
-echo "[$(date)] Starting ingest..." | tee -a ingest.log
+echo "[$(date)] starting ingest" | tee -a ingest.log
 
 while true; do
     PYTHONPATH=. DATA_FILE=data/launches.json python -m src.ingest 2>&1 | tee -a ingest.log
     if [ -f data/.ingest_progress ] && [ "$(cat data/.ingest_progress)" = "DONE" ]; then
-        echo "[$(date)] ✔ Ingest complete." | tee -a ingest.log
+        echo "[$(date)] ingest complete" | tee -a ingest.log
         break
     fi
-    echo "[$(date)] ✗ Ingest exited without DONE marker. Restarting in 30s..." | tee -a ingest.log
+    echo "[$(date)] ingest exited without DONE marker, restarting in 30s" | tee -a ingest.log
     sleep 30
 done
 
-# Keep the tmux pane around for 30s so you can attach and see the result.
+# linger so an attach after completion still shows the result
 sleep 30
 INNER
 )
 
     TERM="${TERM:-xterm-256color}" tmux new-session -d -s "$SESSION" "bash -lc '$inner'"
     sleep 1
-    green "✔ Ingest launched."
+    green "ingest launched"
     echo
     print_status
     echo
-    bold "Useful commands:"
+    echo "useful commands:"
     echo "  bash scripts/auto_ingest.sh status"
     echo "  bash scripts/auto_ingest.sh logs"
-    echo "  bash scripts/auto_ingest.sh attach   # Ctrl+b then d to detach"
+    echo "  bash scripts/auto_ingest.sh attach   # ctrl-b d to detach"
     echo "  bash scripts/auto_ingest.sh stop"
 }
 
 cmd_stop() {
     if is_running; then
         TERM="${TERM:-xterm-256color}" tmux kill-session -t "$SESSION"
-        warn "Killed tmux session '$SESSION'."
+        warn "killed tmux session '$SESSION'"
     else
-        warn "Nothing to stop — '$SESSION' isn't running."
+        warn "nothing to stop, '$SESSION' isn't running"
     fi
 }
 
 cmd_attach() {
     if ! is_running; then
-        warn "No '$SESSION' session — start it first with: bash scripts/auto_ingest.sh"
+        warn "no '$SESSION' session, start it first: bash scripts/auto_ingest.sh"
         exit 1
     fi
     exec env TERM="${TERM:-xterm-256color}" tmux attach -t "$SESSION"
@@ -140,10 +128,10 @@ cmd_attach() {
 
 cmd_logs() {
     if [[ ! -f "$LOG_FILE" ]]; then
-        warn "No log file yet at $LOG_FILE."
+        warn "no log file yet at $LOG_FILE"
         exit 1
     fi
-    echo "Tailing $LOG_FILE — Ctrl+C to stop"
+    echo "tailing $LOG_FILE (ctrl-c to stop)"
     exec tail -f "$LOG_FILE"
 }
 

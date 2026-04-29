@@ -1,4 +1,4 @@
-# Artemis Launch API — convenience targets
+# convenience targets for the artemis launch api
 
 IMAGE ?= REPLACE_ME/artemis-launch-api
 TAG   ?= test

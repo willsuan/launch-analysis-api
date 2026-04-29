@@ -9,6 +9,6 @@ spec:
   ports:
     - port: 5000
       targetPort: 5000
-      # nodePort intentionally unset — k8s auto-assigns one in the 30000–32767
-      # range to avoid collisions with other students' services. Discover it
-      # after deploy with: kubectl get svc artemis-test-api-nodeport
+      # nodePort intentionally unset, k8s auto-assigns one in the 30000-32767
+      # range so we don't collide with other students. Discover after deploy
+      # with: kubectl get svc artemis-test-api-nodeport

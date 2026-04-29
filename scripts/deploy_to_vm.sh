@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
-# deploy_to_vm.sh
-# Runs on your LAPTOP. Shows you the exact steps to bootstrap the project on
-# your class VM. Because the class bastion requires TACC password + MFA,
-# this script prints commands for you to execute interactively rather than
-# trying to chain SSH through MFA non-interactively.
+# Print the SSH chain to bootstrap the project on the class VM.
+# The bastion needs password + MFA so we can't automate end-to-end.
 #
-# Usage:
 #   ./scripts/deploy_to_vm.sh
 #   ./scripts/deploy_to_vm.sh --tacc-user YOUR_TACC_USERNAME
 
@@ -26,55 +22,53 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-bold() { printf '\033[1m%s\033[0m' "$*"; }
-blue() { printf '\033[1;34m%s\033[0m' "$*"; }
+bold()  { printf '\033[1m%s\033[0m' "$*"; }
+blue()  { printf '\033[1;34m%s\033[0m' "$*"; }
 green() { printf '\033[1;32m%s\033[0m' "$*"; }
 
 cat <<EOF
-$(blue "Artemis Launch API — VM Deployment Helper")
+$(blue "VM deployment helper")
 
-The class VM isn't reachable from your laptop directly; you have to hop
-through the TACC bastion first. Since login requires your password + MFA
-token, we can't fully automate the chain. Follow these steps:
+The class VM isn't directly reachable from your laptop; you hop through
+the TACC bastion. Login requires password + MFA, so this script just
+prints what to type.
 
-$(bold "Step 1.") SSH to the TACC bastion:
+$(bold "1.") SSH to the bastion:
 
   $(green "ssh ${TACC_USER}@${BASTION}")
 
-  Enter your TACC password, then your MFA token.
+  Password, then MFA token.
 
-$(bold "Step 2.") From the bastion, SSH to your personal VM:
+$(bold "2.") From the bastion, SSH to your VM:
 
   $(green "ssh ${VM_ALIAS}")
 
-  You should now be logged in as user 'ubuntu' on the class VM.
+  You'll be 'ubuntu' on the VM.
 
-$(bold "Step 3.") Run the bootstrap script directly from GitHub:
+$(bold "3.") Bootstrap from GitHub:
 
   $(green "curl -fsSL https://raw.githubusercontent.com/willsuan/launch-analysis-api/main/scripts/vm_bootstrap.sh | bash")
 
-  This installs Docker, kubectl, clones the repo, installs Python deps,
-  and runs the test suite. It prints next-step commands when finished.
+  Installs docker, kubectl, clones the repo, sets up the venv, runs pytest.
 
-$(bold "Step 4.") (Optional) Expose the API from the VM so you can hit it
-  from your laptop via a port-forward through the bastion. In a separate
-  terminal on your laptop:
+$(bold "4.") (optional) Forward port 5000 to your laptop so you can hit
+  the local API from your browser. In a separate laptop terminal:
 
   $(green "ssh -L 5000:${VM_ALIAS}:5000 ${TACC_USER}@${BASTION}")
 
-  Then in your browser visit http://localhost:5000/help
+  Then visit http://localhost:5000/help.
 
 EOF
 
-# Optionally scp the bootstrap script to the bastion, so you can run it
-# without curl if the VM lacks egress for some reason.
+# If the egress is broken on the VM you can scp the script through the bastion
+# instead of curl-piping it.
 if [[ -f "$(dirname "$0")/vm_bootstrap.sh" ]]; then
     cat <<EOF
-$(bold "Alternative") — copy the bootstrap script through the bastion:
+fallback (no egress from VM): scp the bootstrap through the bastion.
 
   $(green "scp $(dirname "$0")/vm_bootstrap.sh ${TACC_USER}@${BASTION}:~/")
 
-  Then on the bastion:
+  On the bastion:
   $(green "scp vm_bootstrap.sh ${VM_ALIAS}:~/")
   $(green "ssh ${VM_ALIAS} 'bash ~/vm_bootstrap.sh'")
 

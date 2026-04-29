@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
-# k8s_deploy.sh — full Kubernetes deployment in one shot.
+# Build the image, push to Docker Hub, apply k8s manifests, copy in the
+# dataset, and load Redis. Run from the repo root on the class VM.
 #
-# Steps it performs:
-#   1. docker login (only if needed)
-#   2. docker build & push willsuan/artemis-launch-api:<env>
-#   3. kubectl apply -f kubernetes/<env>/
-#   4. wait for the API pod to become Ready
-#   5. kubectl cp data/launches.json into the API pod
-#   6. curl POST /data inside the API pod to load Redis
-#   7. print the public URL and run a smoke test
-#
-# Usage (run from the VM, inside ~/launch-analysis-api):
-#   bash scripts/k8s_deploy.sh test     # default
+#   bash scripts/k8s_deploy.sh test
 #   bash scripts/k8s_deploy.sh prod
-#   bash scripts/k8s_deploy.sh test --skip-build   # if image already pushed
+#   bash scripts/k8s_deploy.sh test --skip-build   # image already pushed
 
 set -euo pipefail
 
@@ -37,7 +28,6 @@ green() { printf '\033[1;32m%s\033[0m\n' "$*"; }
 blue()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
 warn()  { printf '\033[1;33m%s\033[0m\n' "$*"; }
 
-# --------- 0. Sanity ---------
 if ! command -v kubectl >/dev/null 2>&1; then
     warn "kubectl not found. Are you on the class VM?"
     exit 1
@@ -53,7 +43,6 @@ echo "  Ingress host: $INGRESS_HOST"
 echo "  Data file:    $DATA_FILE ($(wc -c < "$DATA_FILE") bytes)"
 echo
 
-# --------- 1. Build & push ---------
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
     if ! docker info >/dev/null 2>&1; then
         SUDO="sudo "
@@ -61,38 +50,33 @@ if [[ "$SKIP_BUILD" -eq 0 ]]; then
         SUDO=""
     fi
     if ! ${SUDO}docker info 2>/dev/null | grep -q "Username:"; then
-        bold "→ docker login required"
+        bold "-> docker login"
         ${SUDO}docker login -u "$DOCKER_USER"
     fi
-    bold "→ docker build $IMAGE"
+    bold "-> docker build $IMAGE"
     ${SUDO}docker build -t "$IMAGE" .
-    bold "→ docker push $IMAGE"
+    bold "-> docker push $IMAGE"
     ${SUDO}docker push "$IMAGE"
 fi
 
-# --------- 2. Apply manifests ---------
-bold "→ kubectl apply -f kubernetes/$ENV/"
+bold "-> kubectl apply -f kubernetes/$ENV/"
 kubectl apply -f "kubernetes/$ENV/"
 
-# --------- 3. Wait for pods ---------
-bold "→ Waiting for pods to become Ready (up to 5 minutes)..."
+bold "-> waiting for pods to become Ready (up to 5 min)..."
 kubectl wait --for=condition=Ready pod -l app=$NAMESPACE_PREFIX-redis  --timeout=300s
 kubectl wait --for=condition=Ready pod -l app=$NAMESPACE_PREFIX-api    --timeout=300s
 kubectl wait --for=condition=Ready pod -l app=$NAMESPACE_PREFIX-worker --timeout=300s
 
-# --------- 4. Copy data file ---------
 API_POD=$(kubectl get pods -l app=$NAMESPACE_PREFIX-api -o jsonpath='{.items[0].metadata.name}')
-bold "→ kubectl cp $DATA_FILE $API_POD:/data/launches.json"
+bold "-> kubectl cp $DATA_FILE $API_POD:/data/launches.json"
 kubectl cp "$DATA_FILE" "$API_POD:/data/launches.json"
 
-# --------- 5. Load Redis ---------
-bold "→ POST /data inside the API pod to load Redis"
+bold "-> POST /data inside the API pod to load Redis"
 kubectl exec "$API_POD" -- python -c "import urllib.request,json; r=urllib.request.urlopen(urllib.request.Request('http://localhost:5000/data', method='POST')); print(r.read().decode())"
 
-# --------- 6. Public smoke test ---------
 NODE_PORT=$(kubectl get svc $NAMESPACE_PREFIX-api-nodeport -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "")
 
-green "✔ Deployed."
+green "Deployed."
 echo
 bold "=== Connection details ==="
 echo "  Pods:"
@@ -108,11 +92,11 @@ if [[ -n "$NODE_PORT" ]]; then
     echo "    curl coe332.tacc.cloud:$NODE_PORT/help"
 fi
 echo
-bold "=== Smoke test (via ingress) ==="
+bold "=== Smoke test ==="
 sleep 3  # ingress takes a few seconds to wire up
 if curl -fs -m 10 "http://$INGRESS_HOST/help" | python3 -m json.tool | head -15; then
-    green "✔ Public endpoint responding."
+    green "Public endpoint responding."
 else
-    warn "Ingress not yet reachable — give it 30s and retry:"
+    warn "Ingress not yet reachable. Give it 30s and try:"
     echo "  curl http://$INGRESS_HOST/help"
 fi

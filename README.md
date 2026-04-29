@@ -4,7 +4,7 @@ A REST API for exploring and analyzing space launch data, with a focus on the Ar
 
 **Authors:** Will Suan and Dilynn Derden
 
-**Course:** COE 332 — Software Engineering and Design
+**Course:** COE 332, Software Engineering and Design
 
 ---
 
@@ -51,7 +51,7 @@ This system allows users to:
 
 ## Data Source
 
-[Launch Library 2 API](https://ll.thespacedevs.com/2.2.0/launch/) — a public dataset of ~7,800 historical and upcoming space launches. We ingest the full dataset once into `data/launches.json` (to avoid hitting the rate limit on each deploy), then load it into Redis on demand via `POST /data`.
+[Launch Library 2 API](https://ll.thespacedevs.com/2.2.0/launch/), a public dataset of ~7,800 historical and upcoming space launches. We ingest the full dataset once into `data/launches.json` (to avoid hitting the rate limit on each deploy), then load it into Redis on demand via `POST /data`.
 
 ## Repository Layout
 
@@ -118,7 +118,7 @@ pip install -r requirements.txt fakeredis
 make ingest
 ```
 
-This walks the paginated LL2 API and writes `data/launches.json`. It takes several minutes and is rate-limited — you only need to do it once.
+This walks the paginated LL2 API and writes `data/launches.json`. Takes several minutes and is rate-limited, but you only need to do it once.
 
 ### 3. Run the test suite
 
@@ -217,7 +217,7 @@ Redis is configured with `--save 60 1 --appendonly yes`, so:
 - **AOF** (`appendonly.aof`) records every write operation.
 - Both files live on the `artemis-{env}-redis-pvc` PersistentVolumeClaim so they survive pod restarts.
 
-To restore from a snapshot, copy the `dump.rdb` file onto the Redis PVC mount point (`/data` inside the pod) and restart the Redis deployment — Redis loads it automatically at startup.
+To restore from a snapshot, copy the `dump.rdb` file onto the Redis PVC mount point (`/data` inside the pod) and restart the Redis deployment. Redis loads it automatically at startup.
 
 ---
 
@@ -251,9 +251,9 @@ curl -X POST http://localhost:5000/jobs \
 ```
 
 Supported `plot_type` values:
-- `success_rate_over_time` — optional `start_year`, `end_year`
+- `success_rate_over_time` (optional `start_year`, `end_year`)
 - `frequency_by_provider`
-- `outcomes_pie` — optional `provider` or `rocket_family`
+- `outcomes_pie` (optional `provider` or `rocket_family`)
 
 ## Citations
 
